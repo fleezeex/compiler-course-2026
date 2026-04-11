@@ -1,4 +1,4 @@
-; RUN: opt -load-pass-plugin %llvmshlibdir/volkov_lab2_LLVM_IR%pluginext \
+; RUN: opt -load-pass-plugin %llvmshlibdir/volkov_a_lab2_LLVM_IR%pluginext \
 ; RUN:     -passes=volkov-powi-opt -S %s | FileCheck %s
 
 declare float @llvm.powi.f32.i32(float, i32)
