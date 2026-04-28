@@ -1,0 +1,99 @@
+# RUN: llc -mtriple x86_64-unknown-linux-gnu --load=%llvmshlibdir/volkov_a_lab3_BACKEND%shlibext -run-pass=volkov-inline %s -o - | FileCheck %s
+--- |
+  define i32 @add(i32 %arg1, i32 %arg2) {
+    %res = add i32 %arg1, %arg2
+    ret i32 %res
+  }
+
+  define i32 @small(i32 %val) {
+    %v1 = add i32 %val, 1
+    %v2 = add i32 %v1, 2
+    %v3 = add i32 %v2, 3
+    ret i32 %v3
+  }
+
+  define i32 @large(i32 %val) {
+    %s1 = add i32 %val, 1
+    %s2 = add i32 %s1, 2
+    %s3 = add i32 %s2, 3
+    %s4 = add i32 %s3, 4
+    %s5 = add i32 %s4, 5
+    %s6 = add i32 %s5, 6
+    %s7 = add i32 %s6, 7
+    %s8 = add i32 %s7, 8
+    %s9 = add i32 %s8, 9
+    %s10 = add i32 %s9, 10
+    %s11 = add i32 %s10, 11
+    %s12 = add i32 %s11, 12
+    %s13 = add i32 %s12, 13
+    %s14 = add i32 %s13, 14
+    %s15 = add i32 %s14, 15
+    %s16 = add i32 %s15, 16
+    ret i32 %s16
+  }
+
+  define i32 @factorial(i32 %num) {
+    %is_base = icmp sle i32 %num, 1
+    br i1 %is_base, label %base_case, label %recursive_case
+  base_case:
+    ret i32 1
+  recursive_case:
+    %next_val = sub i32 %num, 1
+    %rec_res = call i32 @factorial(i32 %next_val)
+    %final_res = mul i32 %num, %rec_res
+    ret i32 %final_res
+  }
+
+  define i32 @main() {
+    %out1 = call i32 @add(i32 10, i32 20)
+    %out2 = call i32 @small(i32 1)
+    %out3 = call i32 @large(i32 3)
+    %out4 = call i32 @factorial(i32 4)
+    %sum1 = add i32 %out1, %out2
+    %sum2 = add i32 %sum1, %out3
+    %total = add i32 %sum2, %out4
+    ret i32 %total
+  }
+...
+# CHECK-LABEL: name: main
+name: main
+tracksRegLiveness: true
+body: |
+  bb.0:
+    ; CHECK: %0:gr32 = MOV32ri 10
+    ; CHECK: %1:gr32 = MOV32ri 20
+    ; CHECK: %2:gr32 = ADD32rr %0, %1, implicit-def dead $eflags
+    ; CHECK: %3:gr32 = MOV32ri 1
+    ; CHECK: %4:gr32 = ADD32ri %3, 1, implicit-def dead $eflags
+    ; CHECK: %5:gr32 = ADD32ri %4, 2, implicit-def dead $eflags
+    ; CHECK: %6:gr32 = ADD32ri %5, 3, implicit-def dead $eflags
+    ; CHECK: %7:gr32 = MOV32ri 3
+    ; CHECK: CALL64pcrel32 @large
+    ; CHECK: %8:gr32 = COPY $eax
+    ; CHECK: %9:gr32 = MOV32ri 4
+    ; CHECK: CALL64pcrel32 @factorial
+    ; CHECK: %10:gr32 = COPY $eax
+
+    %0:gr32 = MOV32ri 10
+    %1:gr32 = MOV32ri 20
+    %2:gr32 = ADD32rr %0, %1, implicit-def dead $eflags
+    
+    %3:gr32 = MOV32ri 1
+    %4:gr32 = ADD32ri %3, 1, implicit-def dead $eflags
+    %5:gr32 = ADD32ri %4, 2, implicit-def dead $eflags
+    %6:gr32 = ADD32ri %5, 3, implicit-def dead $eflags
+    
+    %7:gr32 = MOV32ri 3
+    CALL64pcrel32 @large, csr_64, implicit $sp, implicit $ssp, implicit-def $eax
+    %8:gr32 = COPY $eax
+    
+    %9:gr32 = MOV32ri 4
+    CALL64pcrel32 @factorial, csr_64, implicit $sp, implicit $ssp, implicit-def $eax
+    %10:gr32 = COPY $eax
+    
+    %11:gr32 = ADD32rr %2, %6, implicit-def dead $eflags
+    %12:gr32 = ADD32rr %11, %8, implicit-def dead $eflags
+    %13:gr32 = ADD32rr %12, %10, implicit-def dead $eflags
+    
+    $eax = COPY %13
+    RET 0, $eax
